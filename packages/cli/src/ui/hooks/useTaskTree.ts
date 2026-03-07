@@ -139,8 +139,9 @@ export function useTaskTree(
     const visible = flattenVisibleNodes(nodes);
     if (visible.length === 0) return;
     const idx = visible.findIndex((n) => n.toolCall.callId === focusedId);
-    const prev = visible[(idx - 1 + visible.length) % visible.length];
-    setFocusedId(prev.toolCall.callId);
+    // When nothing is focused (idx === -1), jump to the last visible node.
+    const prevIdx = idx === -1 ? visible.length - 1 : (idx - 1 + visible.length) % visible.length;
+    setFocusedId(visible[prevIdx].toolCall.callId);
   }, [nodes, focusedId]);
 
   return {
