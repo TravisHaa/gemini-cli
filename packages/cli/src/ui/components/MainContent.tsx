@@ -19,6 +19,9 @@ import { useMemo, memo, useCallback, useEffect, useRef } from 'react';
 import { MAX_GEMINI_MESSAGE_LINES } from '../constants.js';
 import { useConfirmingTool } from '../hooks/useConfirmingTool.js';
 import { ToolConfirmationQueue } from './ToolConfirmationQueue.js';
+import { TaskTree } from './TaskTree.js';
+import { useTaskTree } from '../hooks/useTaskTree.js';
+import type { IndividualToolCallDisplay } from '../types.js';
 
 const MemoizedHistoryItemDisplay = memo(HistoryItemDisplay);
 const MemoizedAppHeader = memo(AppHeader);
@@ -35,6 +38,19 @@ export const MainContent = () => {
   const confirmingTool = useConfirmingTool();
   const showConfirmationQueue = confirmingTool !== null;
   const confirmingToolCallId = confirmingTool?.tool.callId;
+
+  // Gather all tool calls from pending tool_group items for the task tree.
+  const allPendingToolCalls = useMemo<IndividualToolCallDisplay[]>(() => {
+    const calls: IndividualToolCallDisplay[] = [];
+    for (const item of uiState.pendingHistoryItems) {
+      if (item.type === 'tool_group') {
+        calls.push(...item.tools);
+      }
+    }
+    return calls;
+  }, [uiState.pendingHistoryItems]);
+
+  const taskTree = useTaskTree(allPendingToolCalls);
 
   const scrollableListRef = useRef<VirtualizedListRef<unknown>>(null);
 
@@ -152,6 +168,15 @@ export const MainContent = () => {
             />
           );
         })}
+        {/* Task tree: shown alongside pending items whenever there is a
+            real parent–child hierarchy among the active tool calls. */}
+        {taskTree.hasHierarchy && (
+          <TaskTree
+            {...taskTree}
+            terminalWidth={mainAreaWidth}
+            isFocused={!uiState.embeddedShellFocused}
+          />
+        )}
         {showConfirmationQueue && confirmingTool && (
           <ToolConfirmationQueue confirmingTool={confirmingTool} />
         )}
@@ -160,11 +185,13 @@ export const MainContent = () => {
     [
       pendingHistoryItems,
       uiState.constrainHeight,
+      uiState.embeddedShellFocused,
       staticAreaMaxItemHeight,
       mainAreaWidth,
       showConfirmationQueue,
       confirmingTool,
       uiState.history,
+      taskTree,
     ],
   );
 
