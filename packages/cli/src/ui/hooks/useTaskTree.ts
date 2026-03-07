@@ -102,10 +102,10 @@ export function useTaskTree(
     [toolCalls, collapsedIds, focusedId],
   );
 
-  const hasHierarchy = useMemo(
-    () => toolCalls.some((t) => t.parentCallId),
-    [toolCalls],
-  );
+  // Show the tree whenever there are active tool calls — even flat sequences
+  // benefit from the tree's status-icon-per-row layout.  Nested calls (those
+  // with a parentCallId) cause the tree to render with indentation.
+  const hasHierarchy = useMemo(() => toolCalls.length > 0, [toolCalls]);
 
   const toggleCollapse = useCallback((callId: string) => {
     setCollapsedIds((prev) => {

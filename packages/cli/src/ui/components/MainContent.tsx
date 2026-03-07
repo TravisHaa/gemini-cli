@@ -143,39 +143,73 @@ export const MainContent = () => {
   const pendingItems = useMemo(
     () => (
       <Box flexDirection="column">
-        {pendingHistoryItems.map((item, i) => {
-          const prevType =
-            i === 0
-              ? uiState.history.at(-1)?.type
-              : pendingHistoryItems[i - 1]?.type;
-          const isFirstThinking =
-            item.type === 'thinking' && prevType !== 'thinking';
-          const isFirstAfterThinking =
-            item.type !== 'thinking' && prevType === 'thinking';
-
-          return (
-            <HistoryItemDisplay
-              key={i}
-              availableTerminalHeight={
-                uiState.constrainHeight ? staticAreaMaxItemHeight : undefined
-              }
+        {/* When the task tree is active, it replaces the per-call flat rows
+            so tools aren't rendered twice.  Non-tool_group items (text
+            messages, etc.) still render normally. */}
+        {taskTree.hasHierarchy ? (
+          <>
+            {(() => {
+              const nonToolGroup = pendingHistoryItems.filter(
+                (item) => item.type !== 'tool_group',
+              );
+              return nonToolGroup.map((item, i) => {
+                const prevType =
+                  i === 0
+                    ? uiState.history.at(-1)?.type
+                    : nonToolGroup[i - 1]?.type;
+                const isFirstThinking =
+                  item.type === 'thinking' && prevType !== 'thinking';
+                const isFirstAfterThinking =
+                  item.type !== 'thinking' && prevType === 'thinking';
+                return (
+                  <HistoryItemDisplay
+                    key={i}
+                    availableTerminalHeight={
+                      uiState.constrainHeight
+                        ? staticAreaMaxItemHeight
+                        : undefined
+                    }
+                    terminalWidth={mainAreaWidth}
+                    item={{ ...item, id: 0 }}
+                    isPending={true}
+                    isExpandable={true}
+                    isFirstThinking={isFirstThinking}
+                    isFirstAfterThinking={isFirstAfterThinking}
+                  />
+                );
+              });
+            })()}
+            <TaskTree
+              {...taskTree}
               terminalWidth={mainAreaWidth}
-              item={{ ...item, id: 0 }}
-              isPending={true}
-              isExpandable={true}
-              isFirstThinking={isFirstThinking}
-              isFirstAfterThinking={isFirstAfterThinking}
+              isFocused={!uiState.embeddedShellFocused}
             />
-          );
-        })}
-        {/* Task tree: shown alongside pending items whenever there is a
-            real parent–child hierarchy among the active tool calls. */}
-        {taskTree.hasHierarchy && (
-          <TaskTree
-            {...taskTree}
-            terminalWidth={mainAreaWidth}
-            isFocused={!uiState.embeddedShellFocused}
-          />
+          </>
+        ) : (
+          pendingHistoryItems.map((item, i) => {
+            const prevType =
+              i === 0
+                ? uiState.history.at(-1)?.type
+                : pendingHistoryItems[i - 1]?.type;
+            const isFirstThinking =
+              item.type === 'thinking' && prevType !== 'thinking';
+            const isFirstAfterThinking =
+              item.type !== 'thinking' && prevType === 'thinking';
+            return (
+              <HistoryItemDisplay
+                key={i}
+                availableTerminalHeight={
+                  uiState.constrainHeight ? staticAreaMaxItemHeight : undefined
+                }
+                terminalWidth={mainAreaWidth}
+                item={{ ...item, id: 0 }}
+                isPending={true}
+                isExpandable={true}
+                isFirstThinking={isFirstThinking}
+                isFirstAfterThinking={isFirstAfterThinking}
+              />
+            );
+          })
         )}
         {showConfirmationQueue && confirmingTool && (
           <ToolConfirmationQueue confirmingTool={confirmingTool} />
