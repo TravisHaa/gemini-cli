@@ -25,6 +25,7 @@ function makeTool(
     description: `args for ${name}`,
     status: CoreToolCallStatus.Success,
     resultDisplay: undefined,
+    confirmationDetails: undefined,
     approvalMode: undefined,
     isClientInitiated: false,
     ...opts,
