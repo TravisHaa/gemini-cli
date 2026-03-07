@@ -13,10 +13,16 @@ import { keyMatchers, Command } from '../keyMatchers.js';
 import type { TaskTreeNode } from '../types.js';
 import type { UseTaskTreeResult } from '../hooks/useTaskTree.js';
 
-interface TaskTreeProps extends UseTaskTreeResult {
+interface TaskTreeProps
+  extends Omit<UseTaskTreeResult, 'isHoldingAfterCompletion'> {
   terminalWidth: number;
   /** Whether the tree should capture key events. */
   isFocused?: boolean;
+  /**
+   * When true the tool calls have all finished and we are in the post-completion
+   * hold window — show a "done" badge instead of the live navigation hint.
+   */
+  isHoldingAfterCompletion?: boolean;
 }
 
 /**
@@ -30,6 +36,7 @@ export const TaskTree: React.FC<TaskTreeProps> = ({
   nodes,
   terminalWidth,
   isFocused = true,
+  isHoldingAfterCompletion = false,
   toggleCollapse,
   collapseAll,
   expandAll,
@@ -75,9 +82,15 @@ export const TaskTree: React.FC<TaskTreeProps> = ({
         <Text color={theme.text.secondary} bold>
           Task Tree
         </Text>
-        <Text color={theme.text.secondary}>
-          {'  ↑↓ navigate  →/← expand/collapse  Ctrl+] expand all  Ctrl+[ collapse all'}
-        </Text>
+        {isHoldingAfterCompletion ? (
+          // Post-completion hold: show "done" badge so the user knows
+          // the tree will clear in a few seconds.
+          <Text color={theme.status.success}>{'  ✓ done  (clears in 3s)'}</Text>
+        ) : (
+          <Text color={theme.text.secondary}>
+            {'  ↑↓ navigate  →/← expand/collapse  Ctrl+] expand all  Ctrl+[ collapse all'}
+          </Text>
+        )}
       </Box>
 
       {/* Tree rows */}

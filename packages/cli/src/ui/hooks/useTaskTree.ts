@@ -4,8 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type { IndividualToolCallDisplay, TaskTreeNode } from '../types.js';
+
+/** How long (ms) to keep the tree visible after all tool calls complete. */
+const COMPLETION_HOLD_MS = 3000;
 
 /**
  * Builds a TaskTreeNode hierarchy from a flat list of tool calls.
@@ -72,6 +75,11 @@ export interface UseTaskTreeResult {
   nodes: TaskTreeNode[];
   /** Whether there is actually a hierarchy to show (any tool has a parentCallId). */
   hasHierarchy: boolean;
+  /**
+   * True when all tool calls have finished and the tree is in its post-completion
+   * hold window (visible for COMPLETION_HOLD_MS before clearing).
+   */
+  isHoldingAfterCompletion: boolean;
   /** Toggle the collapsed state of a specific node. */
   toggleCollapse: (callId: string) => void;
   /** Collapse all nodes. */
@@ -97,15 +105,49 @@ export function useTaskTree(
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
-  const nodes = useMemo(
+  // When tool calls drain to empty, hold the last snapshot visible for a few
+  // seconds so the user can read the completed tree before it disappears.
+  const [heldNodes, setHeldNodes] = useState<TaskTreeNode[]>([]);
+  const [isHeld, setIsHeld] = useState(false);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const liveNodes = useMemo(
     () => buildTree(toolCalls, collapsedIds, focusedId),
     [toolCalls, collapsedIds, focusedId],
   );
 
-  // Show the tree whenever there are active tool calls — even flat sequences
-  // benefit from the tree's status-icon-per-row layout.  Nested calls (those
-  // with a parentCallId) cause the tree to render with indentation.
-  const hasHierarchy = useMemo(() => toolCalls.length > 0, [toolCalls]);
+  // Trigger the hold whenever live tool calls transition from non-empty → empty.
+  useEffect(() => {
+    if (toolCalls.length === 0 && liveNodes.length === 0 && heldNodes.length > 0) {
+      // Calls just finished — start the hold timer.
+      setIsHeld(true);
+      holdTimerRef.current = setTimeout(() => {
+        setIsHeld(false);
+        setHeldNodes([]);
+      }, COMPLETION_HOLD_MS);
+    } else if (toolCalls.length > 0) {
+      // New calls arrived — cancel any in-progress hold and update snapshot.
+      if (holdTimerRef.current) {
+        clearTimeout(holdTimerRef.current);
+        holdTimerRef.current = null;
+      }
+      setIsHeld(false);
+      setHeldNodes(liveNodes);
+    }
+  }, [toolCalls.length, liveNodes, heldNodes.length]);
+
+  // Clean up the timer if the component unmounts mid-hold.
+  useEffect(() => {
+    return () => {
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    };
+  }, []);
+
+  // Expose live nodes during execution; held (frozen) nodes during the hold period.
+  const nodes = toolCalls.length > 0 ? liveNodes : isHeld ? heldNodes : [];
+
+  // Show the tree whenever there are active calls OR we're in the hold window.
+  const hasHierarchy = toolCalls.length > 0 || isHeld;
 
   const toggleCollapse = useCallback((callId: string) => {
     setCollapsedIds((prev) => {
@@ -120,8 +162,10 @@ export function useTaskTree(
   }, []);
 
   const collapseAll = useCallback(() => {
-    setCollapsedIds(new Set(toolCalls.map((t) => t.callId)));
-  }, [toolCalls]);
+    // Flatten the currently visible nodes (live or held) to collect all callIds.
+    const allCallIds = flattenVisibleNodes(nodes).map((n) => n.toolCall.callId);
+    setCollapsedIds(new Set(allCallIds));
+  }, [nodes]);
 
   const expandAll = useCallback(() => {
     setCollapsedIds(new Set());
@@ -147,6 +191,7 @@ export function useTaskTree(
   return {
     nodes,
     hasHierarchy,
+    isHoldingAfterCompletion: isHeld,
     toggleCollapse,
     collapseAll,
     expandAll,
